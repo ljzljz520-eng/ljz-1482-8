@@ -1,0 +1,12 @@
+{
+  "name": "fire-drill-rehearsal",
+  "version": "1.0.0",
+  "description": "消防演练脚本排练与离线播放工具（仅组织排练与内容呈现，不控制真实消防设施）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

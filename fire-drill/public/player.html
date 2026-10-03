@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>消防演练离线播放包</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--line:#dde3ea;--ink:#1f2933;--muted:#66707a;--pri:#b43b2b;--ok:#1e7d4f;--warn:#b26a00;--err:#b3261e;--blue:#1c5fa8;--soft:#fdf0ee}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:#20242b;color:#fff;padding:14px 20px}header h1{margin:0;font-size:17px}.safe{background:#4a2420;color:#ffc7bf;padding:4px 10px;border-radius:10px;font-size:12px;margin-left:8px}
+main{max-width:1060px;margin:18px auto;padding:0 16px}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 13px;cursor:pointer;font-size:13px;margin:3px 4px 3px 0}.btn.pri{background:var(--pri);color:#fff;border-color:var(--pri)}.btn.ok{background:var(--ok);color:#fff;border-color:var(--ok)}.btn.warn{background:var(--warn);color:#fff;border-color:var(--warn)}
+input,select,textarea{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit}
+.banner{border-radius:8px;padding:10px 13px;margin:8px 0;font-size:13px}.banner.err{background:#fde8e6;border:1px solid #e2a59f;color:var(--err)}.banner.warn{background:#fff4e0;border:1px solid #e7c282;color:var(--warn)}.banner.ok{background:#e3f4ea;border:1px solid #9fd4b6;color:var(--ok)}.banner.info{background:#e8f0fa;border:1px solid #a8c6e6;color:var(--blue)}.banner.dark{background:#20242b;color:#ffd9d3;border:1px solid #5a2c26}
+.gate{border:1px dashed #c9b3b0;background:var(--soft);border-radius:8px;padding:10px 12px;margin:8px 0}.gate.done{background:#eaf6ef;border-color:#aed9c0}
+.stage{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}.stage .sh{padding:11px 14px;background:#f7f8fa;font-weight:700;cursor:pointer}.stage.current .sh{background:var(--soft);border-left:4px solid var(--pri)}.stage .sb{padding:12px 14px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}th{background:#f0f2f5}
+.tl{display:flex}.tl .t{flex:1;text-align:center;padding:8px 4px;font-size:12px}.tl .dot{width:26px;height:26px;border-radius:50%;background:#d7dde3;color:#fff;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-weight:700}.tl .cur .dot{background:var(--pri)}.tl .done .dot{background:var(--ok)}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:4px}.badge.late{background:#fde8e6;color:var(--err)}.badge.off{background:#e9e4f7;color:#5c3fa8}
+.muted{color:var(--muted)}.small{font-size:12px}ul{margin:6px 0;padding-left:20px}.chip{display:inline-block;background:#eef2f6;border:1px solid var(--line);border-radius:9px;padding:2px 8px;font-size:11px;margin:2px}
+#toast{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px}.to{padding:10px 14px;border-radius:8px;color:#fff;max-width:360px}.to.ok{background:var(--ok)}.to.err{background:var(--err)}.to.warn{background:var(--warn)}
+@media print*{}.printhead{display:none}
+</style>
+</head>
+<body>
+<header><h1>🧯 消防演练离线播放包 <span class="safe">仅排练呈现 · 不控制真实消防设施</span></h1></header>
+<main id="app"><div class="card">正在加载…</div></main>
+<div id="toast"></div>
+<script id="drill-data" type="application/json">/*__PACKAGE_JSON__*/null</script>
+<script>
+'use strict';
+/* 数据从内联 JSON 脚本标签读取；本页面不发起任何网络请求即可播放 */
+let PKG = null;
+try { PKG = JSON.parse(document.getElementById('drill-data').textContent); } catch (e) {}
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const h=(s)=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now=()=>new Date().toISOString();
+const fmt=(ts)=>ts?new Date(ts).toLocaleString('zh-CN',{hour12:false}):'—';
+const cid=()=>'ce_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+function toast(m,k='info',ms=4000){const b=$('#toast'),t=document.createElement('div');t.className='to '+k;t.textContent=m;b.appendChild(t);setTimeout(()=>t.remove(),ms)}
+
+/* 本地状态：当前进入阶段、已确认 gate、提示音缺失登记（均只存在本设备） */
+const LS_KEY='fd.offline.'+(PKG&&PKG.script?PKG.script.id:'x');
+let local=JSON.parse(localStorage.getItem(LS_KEY)||'null')||{identity:{userName:'',roleKey:''},entered:[],passes:{},missing:[],paused:false,startedAt:null,elapsedBase:0,lastTick:0};
+function saveLocal(){localStorage.setItem(LS_KEY,JSON.stringify(local));}
+
+function resUrl(rid){
+  if(PKG.embeddedResources&&PKG.embeddedResources[rid])return PKG.embeddedResources[rid];
+  const r=(PKG.content.resources||[]).find(x=>x.id===rid);
+  return r?r.url:'';
+}
+function resInfo(rid){return(PKG.content.resources||[]).find(x=>x.id===rid)||{name:rid,kind:'doc',required:false};}
+
+function render(){
+  if(!PKG||PKG.packageType!=='fire-drill-rehearsal-package'){
+    $('#app').innerHTML='<div class="card"><h2>未检测到脚本包数据</h2><p>请从排练系统下载完整的播放包 HTML 后用浏览器打开本文件。</p></div>';return;
+  }
+  const c=PKG.content, stages=c.stages||[];
+  const curKey=local.entered.length?local.entered[local.entered.length-1]:null;
+  const roleVal=local.identity.roleKey;
+  $('#app').innerHTML=`
+  <div class="card">
+    <div class="banner dark">🛑 ${h(PKG.safetyNotice)}</div>
+    <h2 style="margin:4px 0">${h(PKG.script.name)} <span class="chip">v${PKG.version.version} · ${h(PKG.version.status)}</span></h2>
+    <p class="muted small">${h(PKG.script.description||'')}<br>批准：${h(PKG.version.approver||'—')} · ${fmt(PKG.version.approvedAt)} · 导出时间 ${fmt(PKG.exportedAt)}</p>
+    <div class="row small">
+      本设备使用人 <input id="pName" placeholder="姓名" value="${h(local.identity.userName)}" style="width:110px">
+      角色 <select id="pRole">${(c.roles||[]).map(r=>`<option value="${h(r.key)}" ${r.key===roleVal?'selected':''}>${h(r.name)}</option>`).join('')}</select>
+      <button class="btn" id="saveId">保存</button>
+      <button class="btn" id="exportConfirms">⬇ 导出本机确认文件</button>
+      <label class="btn">导入确认文件<input type="file" id="importFile" accept="application/json" hidden></label>
+      <button class="btn" id="resetLocal">清空本机记录</button>
+    </div>
+    <p class="small muted">${h(PKG.offlineConfirmHelp)}</p>
+  </div>
+  <div class="card">
+    <h2>阶段时间线（本地导播，无网络依赖）</h2>
+    <div class="tl">${stages.map((s,i)=>{const done=local.entered.includes(s.key)&&s.key!==curKey;const cur=s.key===curKey;return `<div class="t ${cur?'cur':done?'done':''}"><div class="dot">${i+1}</div><div>${h(s.name)}</div><div class="muted">${s.durationSec}s</div></div>`}).join('')}</div>
+    <div>
+      <button class="btn pri" id="startBtn">${local.startedAt?'重新开始（追加记录）':'开始本地播放'}</button>
+      ${curKey?`<button class="btn warn" id="pauseBtn">${local.paused?'▶ 人工放行恢复':'⏸ 暂停'}</button>`:''}
+      ${curKey&&stages[stages.findIndex(x=>x.key===curKey)+1]?`<button class="btn pri" id="nextBtn">进入下一阶段</button>`:''}
+    </div>
+    ${local.paused?'<div class="banner err">⏸ 已暂停：时间线停止，等待人工放行恢复。暂停期间不能登记确认。</div>':''}
+  </div>
+  <div id="stageCards">${stages.map(s=>stageCard(s,s.key===curKey)).join('')}</div>
+  <div class="card"><h2>资源依赖与人工核对项</h2>
+    <table><thead><tr><th>资源</th><th>类型</th><th>必需</th><th>本机可用性</th></tr></thead><tbody>
+    ${(c.resources||[]).map(r=>{const emb=!!(PKG.embeddedResources&&PKG.embeddedResources[r.id]);return `<tr><td>${h(r.name)}<div class="small muted">${h(r.url)}</div></td><td>${h(r.kind)}</td><td>${r.required?'是':'否'}</td><td>${emb?'<span style="color:var(--ok)">已内嵌</span>':'<span style="color:var(--warn)">未内嵌：开始前人工核对，缺失则用替代手段</span>'}</td></tr>`}).join('')}
+    </tbody></table>
+    <h3>人工核对清单</h3>${(c.manualChecklist||[]).map(t=>`<label class="small" style="display:block"><input type="checkbox" data-check="${h(t)}"> ${h(t)}</label>`).join('')}
+    <h3>本机提示音缺失登记</h3>${local.missing.length?local.missing.map(m=>`<div class="banner warn small">${fmt(m.at)} ${h(m.stageName)} / ${h(resInfo(m.resourceId).name)} — ${h(m.by)}</div>`).join(''):'<span class="muted small">无</span>'}
+  </div>
+  <div class="card"><h2>本机已确认记录（导出后交回主持端导入）</h2>
+    <table><thead><tr><th>观察时间</th><th>阶段</th><th>放行条件</th><th>确认人</th><th>标记</th></tr></thead><tbody>
+    ${Object.values(local.passes).map(p=>`<tr><td class="small">${fmt(p.observedAt)}</td><td>${h(p.stageKey)}</td><td>${h(p.gateLabel)}</td><td>${h(p.userName)}</td><td>离线本机记录</td></tr>`).join('')||'<tr><td colspan="5" class="muted">无</td></tr>'}</tbody></table>
+  </div>`;
+  bind();
+}
+function stageCard(s,cur){
+  const gates=(s.gates||[]).map(g=>{const done=!!local.passes[g.id];
+    return `<div class="gate ${done?'done':''}"><b>${done?'✅':'⛔'} ${h(g.label)}</b>
+    <div class="small muted">责任人：${h(g.authorizedRoleKey)}${g.note?'；'+h(g.note):''}</div>
+    ${done?`<div class="small">${h(local.passes[g.id].userName)} · ${fmt(local.passes[g.id].observedAt)}</div>`:''}
+    ${cur&&!done&&!local.paused?`<button class="btn ok" data-pass="${s.key}|${encodeURIComponent(g.id)}|${encodeURIComponent(g.label)}">我是责任人，人工确认</button>`:''}</div>`}).join('');
+  const media=(s.media||[]).map(m=>{const r=resInfo(m.resourceId),src=resUrl(m.resourceId),miss=local.missing.some(x=>x.resourceId===m.resourceId&&x.stageKey===s.key);
+    const player=r.kind==='audio'?`<audio controls src="${h(src)}"></audio>`:r.kind==='video'?`<video controls src="${h(src)}" style="max-width:300px"></video>`:`<a class="btn" target="_blank" href="${h(src)}">打开</a>`;
+    return `<div style="margin:6px 0"><span class="chip">${h(r.kind)}</span> <b>${h(m.label||r.name)}</b> ${player}
+      ${cur?`<button class="btn warn" data-missing="${s.key}|${encodeURIComponent(m.resourceId)}">🔇 播放不到/缺失，登记</button>`:''}${miss?'<span class="badge late">已登记缺失</span>':''}
+      <div class="small muted">⚠ 播放进度仅为呈现，不代表任何动作完成。</div></div>`}).join('');
+  return `<div class="stage ${cur?'current':''}"><div class="sh">${h(s.name)} <span class="muted small">（计划 ${s.durationSec}s${s.timeoutSec!=null?'，超时提醒 '+s.timeoutSec+'s':''}）</span></div>
+    <div class="sb">${s.briefing?`<div class="banner info small">📢 ${h(s.briefing)}</div>`:''}
+    <table><thead><tr><th>动作</th><th>责任角色</th><th>用时</th></tr></thead><tbody>${(s.actions||[]).map(a=>`<tr><td>${h(a.text)}</td><td>${h(a.ownerRoleKey)}</td><td>${a.durationSec}s</td></tr>`).join('')}</tbody></table>
+    <b>阶段条件（人工放行）</b>${gates||'<div class="muted small">无</div>'}${media}</div></div>`;
+}
+function bind(){
+  $('#saveId').onclick=()=>{local.identity={userName:$('#pName').value.trim(),roleKey:$('#pRole').value};saveLocal();toast('身份已保存在本机','ok');render();};
+  $('#startBtn').onclick=()=>{if(!local.startedAt||confirm('重新开始将清空本机的进入/确认记录（建议先导出）')){local={identity:local.identity,entered:[PKG.content.stages[0]?PKG.content.stages[0].key:''],passes:{},missing:[],paused:false,startedAt:now(),elapsedBase:0,lastTick:Date.now()};saveLocal();render();}};
+  const pb=$('#pauseBtn');if(pb)pb.onclick=()=>{local.paused=!local.paused;saveLocal();render();};
+  const nb=$('#nextBtn');if(nb)nb.onclick=()=>{const c=PKG.content.stages,i=c.findIndex(x=>x.key===local.entered[local.entered.length-1]);
+    const cur=c[i];
+    const open=(cur.gates||[]).every(g=>local.passes[g.id]);
+    if(!open&&!confirm(`阶段「${cur.name}」仍有放行条件未人工确认。\n强制进入只用于现场负责人决策，未完成项将保留。是否继续？`))return;
+    local.entered.push(c[i+1].key);saveLocal();toast('已进入：'+c[i+1].name,'ok');render();};
+  $$('[data-pass]').forEach(b=>b.onclick=()=>{
+    if(local.paused)return toast('暂停中不能确认，等待人工放行恢复','err');
+    if(!local.identity.userName)return toast('请先填写本设备使用人姓名','err');
+    const[sk,gidEnc,labEnc]=b.dataset.pass.split('|'),gid=decodeURIComponent(gidEnc),lab=decodeURIComponent(labEnc);
+    // 责任人自核：设备角色应匹配；总指挥可代行但需理由
+    const gate=PKG.content.stages.find(x=>x.key===sk).gates.find(g=>g.id===gid);
+    if(local.identity.roleKey!==gate.authorizedRoleKey&&local.identity.roleKey!=='commander'){
+      if(!confirm(`你不是该条件的责任人（应为 ${gate.authorizedRoleKey}）。仍要代为确认吗？请确认你已获得现场授权。`))return;
+    }
+    local.passes[gid]={clientEventId:cid(),runKey:PKG.script.id+'@v'+PKG.version.version,type:'gate.pass',stageKey:sk,gateId:gid,gateLabel:lab,
+      roleKey:local.identity.roleKey,userName:local.identity.userName,observedAt:now()};
+    saveLocal();toast('已人工确认（本机记录，不可撤销）。请在联网后导出并交回主持端。','ok',6000);render();
+  });
+  $$('[data-missing]').forEach(b=>b.onclick=()=>{const[sk,ridEnc]=b.dataset.missing.split('|'),rid=decodeURIComponent(ridEnc);
+    const st=PKG.content.stages.find(x=>x.key===sk);
+    local.missing.push({at:now(),stageKey:sk,stageName:st.name,resourceId:rid,by:local.identity.userName||'未命名'});
+    saveLocal();toast('已登记缺失：请改用人工口令/哨音，播放包不会自动替代现场判断','warn',7000);render();});
+  $('#exportConfirms').onclick=()=>{
+    const payload={packageType:'fire-drill-offline-confirmations',exportedAt:now(),
+      scriptId:PKG.script.id,scriptName:PKG.script.name,version:PKG.version.version,
+      device:{userName:local.identity.userName,roleKey:local.identity.roleKey},
+      events:Object.values(local.passes),audioMissing:local.missing};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=`offline-confirm-${PKG.script.id}-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;a.click();
+    toast('确认文件已下载，联网后在主持端“导入离线确认文件”','ok',7000);
+  };
+  $('#importFile').onchange=(e)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{try{const d=JSON.parse(r.result);
+      if(d.packageType!=='fire-drill-offline-confirmations')throw new Error('文件类型不符');
+      let n=0;(d.events||[]).forEach(ev=>{if(!local.passes[ev.gateId]){local.passes[ev.gateId]=ev;n++;}});
+      saveLocal();toast(`已从文件并入 ${n} 条确认（去重）`,'ok');render();
+    }catch(err){toast('导入失败：'+err.message,'err');}};r.readAsText(f);};
+  $('#resetLocal').onclick=()=>{if(confirm('清空本机的进入/确认/缺失登记？（不可恢复）')){localStorage.removeItem(LS_KEY);local={identity:local.identity,entered:[],passes:{},missing:[],paused:false,startedAt:null};render();}};
+}
+render();
+</script>
+</body>
+</html>
