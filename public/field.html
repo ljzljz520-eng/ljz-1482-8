@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>现场确认端</title>
+<link rel="stylesheet" href="/app.css">
+</head><body>
+<nav class="topbar">
+  <span class="brand">🧯 现场确认端（责任人操作）</span>
+  <a href="/index.html">控制台</a><a href="/host.html">主持端</a><a href="/field.html">现场确认端</a>
+  <span class="spacer" style="flex:1"></span><span id="net" style="color:#cbd5e1"></span>
+</nav>
+<div class="wrap">
+  <div class="card row">
+    <select id="runSelect" style="min-width:280px"></select>
+    <span class="muted">我是</span>
+    <input id="pName" placeholder="姓名" style="width:110px">
+    <select id="pRole" style="min-width:160px"></select>
+    <button id="saveMe">保存</button>
+    <label class="muted" style="font-size:12px"><input type="checkbox" id="simOffline"> 模拟断网</label>
+    <span class="spacer" style="flex:1"></span>
+    <span id="queueInfo" class="pill pending">离线队列 0 条</span>
+  </div>
+
+  <div id="offBanner" class="banner red hidden">
+    <b>📴 设备离线：</b>你仍可查看下面缓存的阶段与步骤（后续阶段为<b>暂定</b>，不会改变）。
+    可在本设备对<b>本角色</b>步骤做确认，确认会带本地时间戳排队；恢复网络后自动上传，
+    即便那时阶段已越过，也会作为“迟到确认”事实保留。<b>放行门的“放行决定”不能离线做出</b>，须由在线主持人执行。
+  </div>
+
+  <div class="banner blue">
+    现场纪律：清点/疏散类步骤必须<b>逐房间、按名册人工核实</b>。
+    监控视频、广播或警报播放到某个时间点，<b>不代表人员已完成疏散</b>。
+    超时红色提示只是预设提醒，是否继续、如何处置由现场负责人判断，系统不代为决定。
+  </div>
+
+  <div id="content" class="muted">加载中…</div>
+</div>
+<script type="module" src="/field.js"></script>
+</body></html>

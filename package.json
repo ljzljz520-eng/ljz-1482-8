@@ -1,0 +1,12 @@
+{
+  "name": "fire-drill-rehearsal",
+  "version": "1.0.0",
+  "description": "消防演练脚本排练工具：编排/审核/排练/复盘（仅组织与呈现，不控制真实消防设施）",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "seed": "node src/seed.js"
+  },
+  "engines": { "node": ">=18" }
+}

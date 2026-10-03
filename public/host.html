@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>主持端</title>
+<link rel="stylesheet" href="/app.css">
+</head><body>
+<nav class="topbar">
+  <span class="brand">🧯 主持端（排练控制）</span>
+  <a href="/index.html">控制台</a><a href="/editor.html">编排/审核</a>
+  <a href="/host.html">主持端</a><a href="/field.html">现场确认端</a>
+  <span class="spacer" style="flex:1"></span>
+  <span id="net" style="color:#cbd5e1"></span>
+</nav>
+<div class="wrap">
+  <div id="identityBar" class="card row">
+    <b>主持人身份：</b>
+    <input id="hostName" placeholder="姓名" style="width:120px">
+    <select id="hostRole"></select>
+    <button id="saveIdentity">保存身份</button>
+    <span class="muted">身份保存在本设备；推进权限以主持租约（30s 心跳）为准。</span>
+  </div>
+
+  <div class="card row">
+    <select id="runSelect" style="min-width:320px"></select>
+    <button id="refreshBtn" class="ghost">刷新</button>
+    <span class="spacer" style="flex:1"></span>
+    <a id="fieldLink" class="btn ghost" href="#" target="_blank">打开现场确认端 ↗</a>
+  </div>
+
+  <div id="offlineBanner" class="banner red hidden"></div>
+  <div id="staleBanner" class="banner gray hidden">📴 正在显示断网前缓存的<b>暂定</b>阶段与状态，不能推进、不能放行；重连后自动恢复。</div>
+
+  <div class="grid" style="grid-template-columns:1fr 360px">
+    <div>
+      <div class="card" id="controlCard">
+        <div class="row">
+          <div>
+            <div class="muted" id="runTitle">-</div>
+            <div class="bigclock mono" id="clock">00:00</div>
+            <div class="muted" id="modeLine"></div>
+          </div>
+          <span class="spacer" style="flex:1"></span>
+          <div id="hostBox" class="row"></div>
+        </div>
+        <div class="row" id="controlBtns" style="margin-top:12px"></div>
+        <div id="hostHint" class="muted" style="margin-top:8px"></div>
+      </div>
+
+      <div class="tabs">
+        <button data-tab="timeline" class="active">时间线 / 阶段条件 / 放行</button>
+        <button data-tab="diff">已执行 · 待确认 · 计划修订</button>
+        <button data-tab="export">资源依赖 · 人工核对 · 导出</button>
+      </div>
+
+      <div id="tab-timeline">
+        <div id="reminders"></div>
+        <div class="banner gray">
+          <b>阶段语义：</b>“暂定”阶段在条件满足且由主持人/负责人<b>人工放行</b>前不会进入；
+          即便统一时钟已到计划开始时间，也只显示“已到计划时间”，不自动进入。
+          门控步骤(🚦)与需确认步骤以现场人工确认为准——<b>视频/广播播放时间到达，不代表人员已完成疏散</b>。
+        </div>
+        <div id="phases"></div>
+      </div>
+
+      <div id="tab-diff" class="hidden"></div>
+      <div id="tab-export" class="hidden"></div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>版本与切换点</h2>
+        <div id="versionBox" class="muted"></div>
+      </div>
+      <div class="card">
+        <h2>事件日志（只追加事实）</h2>
+        <div id="eventLog" class="eventlog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/host.js"></script>
+</body></html>

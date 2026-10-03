@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>编排 / 审核</title>
+<link rel="stylesheet" href="/app.css">
+</head><body>
+<nav class="topbar">
+  <span class="brand">🧯 消防演练排练工具</span>
+  <a href="/index.html">控制台</a><a href="/editor.html">编排/审核</a>
+  <a href="/host.html">主持端</a><a href="/field.html">现场确认端</a>
+  <span class="spacer" style="flex:1"></span><span id="who" class="muted" style="color:#cbd5e1"></span>
+</nav>
+<div class="wrap">
+  <div class="grid" style="grid-template-columns:260px 1fr">
+    <div class="card" style="height:fit-content">
+      <h2>脚本</h2>
+      <div id="scriptList" style="margin-bottom:10px"></div>
+      <details><summary class="muted" style="cursor:pointer">＋ 新建脚本</summary>
+        <div class="row" style="margin-top:8px;flex-direction:column;align-items:stretch">
+          <input id="newScriptName" placeholder="脚本名称">
+          <button id="newScriptBtn">创建（含空白草稿）</button>
+        </div>
+      </details>
+      <h3 style="margin-top:16px">版本</h3>
+      <div id="versionList"></div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="row" id="verHead"></div>
+        <div id="verLock"></div>
+      </div>
+      <div id="editor"></div>
+      <div class="card" id="actionsCard">
+        <div class="row" id="verActions"></div>
+        <div class="muted" style="margin-top:8px">
+          审核规则：草稿可编辑 → 提交后锁定 → 审核通过成为<b>不可变快照</b>。
+          已批准版本被排练引用后，任何“撤销/修改”都只能产生新草稿；
+          <b>现场已执行动作是事实，撤销编排不会删除执行记录</b>。新版本仅在已批准的切换点（阶段放行门前）生效。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/editor.js"></script>
+</body></html>

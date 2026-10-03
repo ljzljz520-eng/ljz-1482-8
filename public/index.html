@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>消防演练脚本排练工具</title>
+<link rel="stylesheet" href="/app.css">
+</head><body>
+<nav class="topbar">
+  <span class="brand">🧯 消防演练排练工具</span>
+  <a href="/index.html">控制台</a>
+  <a href="/editor.html">编排/审核</a>
+  <a href="/host.html">主持端</a>
+  <a href="/field.html">现场确认端</a>
+  <span class="spacer" style="flex:1"></span>
+  <span id="net" class="muted" style="color:#cbd5e1"></span>
+</nav>
+<div class="wrap">
+  <div class="banner red" style="margin-top:0">
+    <b>用途边界：</b>本系统只做演练的<b>组织排练与内容呈现</b>——报警、疏散、集合、复盘的脚本编排、审核、
+    排练计时、人工确认与复盘记录。它<b>不连接、不控制任何真实消防设施</b>。
+    阶段切换必须满足条件并由负责人<b>人工放行</b>；视频播放/时间线到点不等于人员已完成疏散；
+    超时只产生<b>预设提醒</b>，不自动推进、不替代现场负责人判断。
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>脚本与版本
+        <span class="spacer" style="flex:1"></span>
+        <a class="btn" href="/editor.html">去编排/审核 →</a></h2>
+      <div id="scripts">加载中…</div>
+    </div>
+    <div class="card">
+      <h2>排练场次</h2>
+      <div class="row" style="margin-bottom:10px">
+        <select id="newScript"></select>
+        <select id="newMode">
+          <option value="clock">统一时钟推进</option>
+          <option value="host">主持人事件推进</option>
+        </select>
+        <input id="newName" placeholder="场次名称（可空）" style="width:200px">
+        <input id="hostQuick" placeholder="主持人姓名" style="width:120px">
+        <button id="createRun">＋ 开排</button>
+      </div>
+      <div class="banner gray">
+        <b>两种推进模式：</b><br>
+        <b>统一时钟</b>：单一排练时钟驱动计划时间线；到点/超时触发提醒，但<b>阶段仍须主持人人工放行</b>，人工确认项不会自动完成。<br>
+        <b>主持人事件</b>：时间线仅作参照，以主持人“放行/暂停/继续”等事件为准推进。<br>
+        两种模式下，主持租约 30s 心跳；崩溃后他人可在租约过期后接管，两人争用时拒绝第二个并提示持有者。
+      </div>
+      <div id="runs">加载中…</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>资源依赖登记（导出前人工核对）</h2>
+    <table><thead><tr><th>资源</th><th>类型</th><th>状态</th><th>备注</th><th></th></tr></thead><tbody id="resBody"></tbody></table>
+    <div class="row" style="margin-top:10px">
+      <input id="rName" placeholder="资源名称">
+      <select id="rKind"><option value="audio">提示音/音频</option><option value="doc">文档/表格</option>
+      <option value="tool">器材</option><option value="other">其他</option></select>
+      <label><input type="checkbox" id="rPresent" checked> 已就绪</label>
+      <input id="rNote" placeholder="备注">
+      <button id="rAdd" class="ghost">＋ 登记</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>验收场景速查</h2>
+    <table>
+      <tr><td>主持端崩溃 / 接管</td><td class="muted">主持端停止心跳 30 秒后租约过期，另一台设备可接管；原主持恢复后心跳被拒（423）。</td></tr>
+      <tr><td>两人争用推进权限</td><td class="muted">第二人“申领主持”返回 409 host_contended 并显示当前持有者；可强制接管（记录事件）。</td></tr>
+      <tr><td>离线确认迟到</td><td class="muted">现场端断网可看暂定阶段、本地排队确认；重连后上传，服务端去重，迟到确认标记 <code>late</code> 且保留为事实。</td></tr>
+      <tr><td>提示音缺失</td><td class="muted">种子数据含“演练警报提示音”缺失资源，阶段卡片与导出包醒目标注，要求哨音/口头替代。</td></tr>
+      <tr><td>新版本改变责任人</td><td class="muted">v2 草稿把 s9 清点上报责任人改为总指挥；批准后只能在阶段切换点生效，差异页展示修订。</td></tr>
+      <tr><td>已执行/待确认/计划修订</td><td class="muted">主持端“差异”页签汇总三类；撤销编排不删除执行记录。</td></tr>
+    </table>
+  </div>
+</div>
+<script type="module">
+import { api, esc, clientId, getIdentity, datetime, bindConnectivity, online, toast } from '/app.js';
+
+const idn = getIdentity();
+bindConnectivity((on) => {
+  document.getElementById('net').innerHTML =
+    `<span class="offline-dot ${on ? 'on' : 'off'}"></span>${on ? '在线' : '离线（仅可查看缓存/本地数据）'} · 设备 ${clientId.slice(0,10)} · ${idn ? esc(idn.name) : '未署名'}`;
+});
+
+async function loadScripts() {
+  const { scripts } = await api('/api/scripts');
+  document.getElementById('scripts').innerHTML = scripts.map(s => {
+    const cur = s.versions.find(v => v.id === s.currentVersionId);
+    return `<div style="padding:9px 0;border-bottom:1px solid var(--line)">
+      <b>${esc(s.name)}</b>
+      <div class="muted" style="margin:3px 0">${esc(s.description || '')}</div>
+      <div class="row">
+        ${s.versions.map(v => `<span class="tag ${v.status}">v${v.version} ${({draft:'草稿',submitted:'待审核',approved:'已批准'})[v.status]}</span>`).join(' ')}
+        <span class="muted">当前：${cur ? 'v' + cur.version : '无批准版本'}</span>
+        <span class="spacer" style="flex:1"></span>
+        <a href="/editor.html?script=${s.id}">编排</a> ·
+        <a href="/editor.html?script=${s.id}&version=${[...s.versions].sort((a,b)=>b.version-a.version)[0].id}">最新版本</a> ·
+        ${cur ? `<a href="/api/scripts/${s.id}/export?versionId=${cur.id}&standalone=1">下载离线播放器</a> ·
+        <a href="/api/scripts/${s.id}/export?versionId=${cur.id}">导出JSON包</a>` : '<span class="muted">批准后可导出</span>'}
+      </div></div>`;
+  }).join('') || '暂无脚本';
+  const sel = document.getElementById('newScript');
+  const approved = scripts.flatMap(s => s.versions.filter(v => v.status === 'approved').map(v => ({ s, v })));
+  sel.innerHTML = approved.map(({ s, v }) => `<option value="${s.id}::${v.id}">${esc(s.name)} v${v.version}</option>`).join('')
+    || '<option value="">（无已批准版本）</option>';
+}
+
+async function loadRuns() {
+  const { runs } = await api('/api/runs');
+  document.getElementById('runs').innerHTML = runs.map(r => `
+    <div style="padding:9px 0;border-bottom:1px solid var(--line)">
+      <div class="row"><span class="tag ${r.status}">${({created:'未开始',running:'进行中',paused:'已暂停',completed:'已结束',cancelled:'已作废'})[r.status]}</span>
+      <b><a href="/host.html?run=${r.id}">${esc(r.name)}</a></b>
+      <span class="tag ${r.mode==='clock'?'submitted':'approved'}">${r.mode==='clock'?'统一时钟':'主持人事件'}</span>
+      <span class="muted">${r.host ? '主持：' + esc(r.host.name) + (r.hostLive ? '（在线）' : '（租约失效）') : '无主持'}</span></div>
+      <div class="muted" style="margin-top:3px">${esc(r.scriptName)} · 事件 ${r.events} 条 ·
+        已确认 ${r.counts.confirmed} / 待确认 ${r.counts.pending}${r.counts.overdue ? ` · 超时 ${r.counts.overdue}` : ''} · ${datetime(r.createdAt)}</div>
+    </div>`).join('') || '暂无场次';
+}
+
+async function loadResources() {
+  const { resources } = await api('/api/resources');
+  document.getElementById('resBody').innerHTML = resources.map(r => `
+    <tr style="${r.present ? '' : 'background:var(--red-bg)'}">
+      <td>${esc(r.name)}</td><td>${({audio:'音频',doc:'文档',tool:'器材',other:'其他'})[r.kind]||r.kind}</td>
+      <td>${r.present ? '<span class="pill confirmed">已就绪</span>' : '<span class="pill overdue">缺失</span>'}</td>
+      <td class="muted">${esc(r.note || '')}</td>
+      <td><button class="ghost" data-id="${r.id}" data-present="${!r.present}">${r.present ? '标记缺失' : '标记就绪'}</button></td>
+    </tr>`).join('');
+  document.querySelectorAll('#resBody button').forEach(b => b.onclick = async () => {
+    await api('/api/resources/' + b.dataset.id, { method: 'PUT', body: { present: b.dataset.present === 'true' } });
+    loadResources();
+  });
+}
+
+document.getElementById('createRun').onclick = async () => {
+  const val = document.getElementById('newScript').value;
+  if (!val) return toast('请先在编排页提交并批准一个版本', 'red');
+  let idn = getIdentity();
+  const quick = document.getElementById('hostQuick').value.trim();
+  if (quick) { idn = { name: quick, roleId: idn?.roleId || '' }; setIdentity(idn); }
+  if (!idn?.name) return toast('请在上方填写主持人姓名（或先到主持端保存身份）', 'red');
+  const [scriptId, versionId] = val.split('::');
+  const created = await api('/api/runs', { method: 'POST', body: {
+    scriptId, versionId, mode: document.getElementById('newMode').value,
+    name: document.getElementById('newName').value, clientId, hostName: idn.name,
+  }});
+  location.href = '/host.html?run=' + created.run.id;
+};
+document.getElementById('rAdd').onclick = async () => {
+  const name = document.getElementById('rName').value.trim();
+  if (!name) return toast('请填写资源名称', 'amber');
+  await api('/api/resources', { method: 'POST', body: { name,
+    kind: document.getElementById('rKind').value,
+    present: document.getElementById('rPresent').checked,
+    note: document.getElementById('rNote').value }});
+  document.getElementById('rName').value = ''; document.getElementById('rNote').value = '';
+  loadResources();
+};
+
+(async function init() { await loadScripts(); await loadRuns(); await loadResources(); })();
+setInterval(() => { loadRuns().catch(() => {}); loadScripts().catch(() => {}); }, 8000);
+</script>
+</body></html>
